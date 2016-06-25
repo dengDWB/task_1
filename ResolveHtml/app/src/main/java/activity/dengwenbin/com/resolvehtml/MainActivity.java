@@ -1,8 +1,10 @@
 package activity.dengwenbin.com.resolvehtml;
 
 import android.annotation.TargetApi;
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
@@ -63,30 +65,31 @@ import okhttp3.Response;
 public class MainActivity extends AppCompatActivity {
 
     private Document doc = null;
-    private Document content = null;
-    private TextView showTv;
     private Context context;
-    private ProgressDialog pd;
     private String url = "https://www.zhihu.com/explore";
-    private List<String> imgList = new ArrayList<>();
-    private List<String> cssList = new ArrayList<>();
-    private List<String> jsList = new ArrayList<>();
     private WebView webView;
     String oldEtag;
     String oldLastModified;
     String newEtag;
     String newLastModified;
-    boolean flag = true;
 
     private OkHttpClient client;
+
+    private String imgUrl = "file:///data/data/activity.dengwenbin.com.resolvehtml/files/HTML/assets/images";
+    private String cssUrl = "file:///data/data/activity.dengwenbin.com.resolvehtml/files/HTML/assets/stylesheets";
+    private String jsUrl = "file:///data/data/activity.dengwenbin.com.resolvehtml/files/HTML/assets/javascripts";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        showTv = (TextView) findViewById(R.id.showContent);
         context = this;
-        isFileDir();
+        try {
+            isFileDir();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         FileDownloader.registerDownloadStatusListener(onFileDownloadStatusListener);
         FileDownloader.registerDownloadFileChangeListener(onDownloadFileChangeListener);
         webView = (WebView) findViewById(R.id.webView);
@@ -97,11 +100,7 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebChromeClient(new WebChromeClient() {
 
         });
-
         downloadHtml();
-//        webView.loadUrl("https://www.zhihu.com/explore");
-
-
     }
 
     //解析html
@@ -113,94 +112,75 @@ public class MainActivity extends AppCompatActivity {
                     System.out.println("再一次加载");
                     doc = Jsoup.parse(htmlInfo);
                     if (doc.equals(null)) {
-                        Thread.sleep(4000);
                         doc = Jsoup.parse(htmlInfo);
                     } else if (!doc.equals(null)) {
                         getImgLink(doc);
                         getStylesheetLink(doc);
                         getJavaScript(doc);
-                        String str = doc.html();
-                        InputStream is = new ByteArrayInputStream(str.getBytes());
-                        Log.e("info", str);
-                        File file = new File(context.getFilesDir().getPath() + "//HTML", "index.html");
-                        if (!file.exists()) {
-                            file.createNewFile();
-                        }
-
-                        FileOutputStream fos = new FileOutputStream(file);
-                        byte[] bytes = new byte[2048];
-                        int len = 0;
-                        while ((len = is.read(bytes)) != -1) {
-                            fos.write(bytes, 0, len);
-                        }
-                        fos.flush();
-                        fos.close();
-                        is.close();
-                        webView.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                webView.loadUrl("file:///" + context.getFilesDir() + "/HTML/index.html");
-                            }
-                        });
-
+                        Thread.sleep(3000);
+                        loadWebView();
                     }
+
                 } catch (IOException e) {
                     e.printStackTrace();
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-
             }
         }).start();
     }
 
     //解析html图片信息
-    public void getImgLink(Document doc) {
+    public void getImgLink(Document doc) throws IOException {
         Elements imgLink = doc.select("img[src]");
         for (Element imgLinks : imgLink) {
-            if (imgLinks.tagName().equals("img")) {
-                Log.e("imgLinks", imgLinks.attr("src"));
-                StringBuffer sb = new StringBuffer(imgLinks.attr("src"));
-                if (sb.indexOf("http", 0) != -1) {
-                    startDownload(imgLinks.attr("src"), "img");
-                } else {
-                    startDownload(url +"/"+imgLinks.attr("src"), "img");
-                }
+            StringBuffer oldSb = new StringBuffer(imgLinks.attr("src"));
+            System.out.println(oldSb.toString());
+            String str = oldSb.substring(oldSb.lastIndexOf("/") + 1, oldSb.length());
+            if (oldSb.indexOf("http", 0) != -1) {
+                startDownload(imgLinks.attr("src"), "img", str);
+            } else {
+                startDownload(url + "/" + imgLinks.attr("src"), "img", str);
             }
+            imgLinks.attr("src", imgUrl + "/" + str);
         }
+        saveIndexHtml();
     }
 
+
     //解析html样式信息
-    public void getStylesheetLink(Document doc) {
+    public void getStylesheetLink(Document doc) throws IOException {
         Elements cssLink = doc.select("link[href]");
         for (Element cssLinks : cssLink) {
             if (cssLinks.attr("rel").equals("stylesheet")) {
-                Log.e("cssLinks", cssLinks.attr("href"));
-                StringBuffer sb = new StringBuffer(cssLinks.attr("href"));
-                if (sb.indexOf("http", 0) != -1) {
-                    startDownload(cssLinks.attr("href"), "css");
+                StringBuffer oldSb = new StringBuffer(cssLinks.attr("href"));
+                String str = oldSb.substring(oldSb.lastIndexOf("/") + 1, oldSb.length());
+                if (oldSb.indexOf("http", 0) != -1) {
+                    startDownload(cssLinks.attr("href"), "css", str);
                 } else {
-                    startDownload(url+"/"+cssLinks.attr("href"), "css");
-                    System.out.println(url+"/"+cssLinks.attr("href"));
+                    startDownload(url + "/" + cssLinks.attr("href"), "css", str);
                 }
+                cssLinks.attr("href", cssUrl + "/" + str);
             }
         }
+
+
     }
 
     //解析htmlJs信息
-    public void getJavaScript(Document doc) {
+    public void getJavaScript(Document doc) throws IOException {
         Elements javascriptLink = doc.select("script[src]");
         for (Element javascriptLinks : javascriptLink) {
-            if (javascriptLinks.attr("type").equals("text/javascript")) {
-                Log.e("javascriptLinks", javascriptLinks.attr("src"));
-                StringBuffer sb = new StringBuffer(javascriptLinks.attr("src"));
-                if (sb.indexOf("http", 0) != -1) {
-                    startDownload(javascriptLinks.attr("src"), "js");
-                } else {
-                    startDownload(url+"/"+javascriptLinks.attr("src"), "js");
-                }
+            StringBuffer oldSb = new StringBuffer(javascriptLinks.attr("src"));
+            String str = oldSb.substring(oldSb.lastIndexOf("/") + 1, oldSb.length());
+            if (oldSb.indexOf("http", 0) != -1) {
+                startDownload(javascriptLinks.attr("src"), "js", str);
+            } else {
+                startDownload(url + "/" + javascriptLinks.attr("src"), "js", str);
             }
+            javascriptLinks.attr("src", jsUrl + "/" + str);
         }
+        saveIndexHtml();
 
     }
 
@@ -235,6 +215,8 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onFileDownloadStatusCompleted(DownloadFileInfo downloadFileInfo) {
             Log.e("links", "下载完成");
+
+
         }
 
         @Override
@@ -263,19 +245,16 @@ public class MainActivity extends AppCompatActivity {
 
 
     //启动一个下载
-    public void startDownload(String url, final String fileType) {
+    public void startDownload(String url, final String fileType, final String filesName) {
         FileDownloader.detect(url, new OnDetectBigUrlFileListener() {
             @Override
             public void onDetectNewDownloadFile(String url, String fileName, String saveDir, long fileSize) {
                 if (fileType.equals("img")) {
-                    FileDownloader.createAndStart(url, context.getFilesDir().getPath() + "//HTML//assets//images", fileName);
-                    imgList.add(fileName);
+                    FileDownloader.createAndStart(url, context.getFilesDir().getPath() + "//HTML//assets//images", filesName);
                 } else if (fileType.equals("css")) {
-                    FileDownloader.createAndStart(url, context.getFilesDir().getPath() + "//HTML//assets//stylesheets", fileName);
-                    cssList.add(fileName);
+                    FileDownloader.createAndStart(url, context.getFilesDir().getPath() + "//HTML//assets//stylesheets", filesName);
                 } else if (fileType.equals("js")) {
-                    FileDownloader.createAndStart(url, context.getFilesDir().getPath() + "//HTML//assets//javascripts", fileName);
-                    jsList.add(fileName);
+                    FileDownloader.createAndStart(url, context.getFilesDir().getPath() + "//HTML//assets//javascripts", filesName);
                 }
             }
 
@@ -292,11 +271,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //判断文件夹是否存在，不存在创建
-    public void isFileDir() {
+    public void isFileDir() throws IOException {
         File htmlFileDir = new File(context.getFilesDir().getPath() + "//HTML");
         if (!htmlFileDir.exists()) {
             htmlFileDir.mkdirs();
         }
+        File htmlFile = new File(context.getFilesDir() + "//HTML//index.html");
+        if (!htmlFile.exists()) {
+            htmlFile.createNewFile();
+        }
+
 
         File imgFileDir = new File(context.getFilesDir().getPath() + "//HTML//assets//images");
         if (!imgFileDir.exists()) {
@@ -338,6 +322,7 @@ public class MainActivity extends AppCompatActivity {
         call.enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
+                showDialog();
             }
 
             @Override
@@ -354,30 +339,30 @@ public class MainActivity extends AppCompatActivity {
                     SharedPreferences getCathe = context.getSharedPreferences("CACHE", MODE_PRIVATE);
                     oldEtag = getCathe.getString("ETag", "");
                     oldLastModified = getCathe.getString("Last-Modified", "");
+                    System.out.println("  最后一次修改的时间" + oldLastModified);
 
                     //判读是否是第一次访问网页
                     if (oldEtag.equals(null) && oldLastModified.equals(null)) {
                         saveCache(newEtag, newLastModified);
                         getHtmlInfo(response.body().string());
                     } else if (newEtag.equals("") && newLastModified.equals("")) {
+                        saveCache(newEtag, newLastModified);
                         getHtmlInfo(response.body().string());
                     } else if (newEtag.equals("")) {
                         if (newLastModified.equals(oldLastModified)) {
-                            loadWebView();
+                            mHandler.obtainMessage(0).sendToTarget();
                         } else {
                             saveCache(newEtag, newLastModified);
                             getHtmlInfo(response.body().string());
                         }
                     } else if (oldLastModified.equals("")) {
                         if (newEtag.equals(oldEtag)) {
-                            loadWebView();
+                            mHandler.obtainMessage(0).sendToTarget();
                         } else {
                             saveCache(newEtag, newLastModified);
                             getHtmlInfo(response.body().string());
                         }
                     }
-                    System.out.println("newETag:" + newEtag + "oldETag:" + oldEtag);
-                    System.out.println("newLast-Modified:" + newLastModified + "oldLast-Modified:" + oldEtag);
 
                 }
 
@@ -385,17 +370,17 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void saveCache(String sTag,String lastModified){
+    private void saveCache(String sTag, String lastModified) {
 
-        SharedPreferences saveCache =context.getSharedPreferences("CACHE", MODE_PRIVATE);
-        SharedPreferences.Editor editor=saveCache.edit();
+        SharedPreferences saveCache = context.getSharedPreferences("CACHE", MODE_PRIVATE);
+        SharedPreferences.Editor editor = saveCache.edit();
         editor.putString("ETag", sTag);
-        editor.putString("Last-Modified",lastModified);
+        editor.putString("Last-Modified", lastModified);
         editor.commit();
 
     }
 
-    public void loadWebView(){
+    public void loadWebView() {
         webView.post(new Runnable() {
             @Override
             public void run() {
@@ -403,6 +388,45 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
+
+    public void saveIndexHtml() throws IOException {
+        String str = doc.html();
+        InputStream is = new ByteArrayInputStream(str.getBytes());
+        File file = new File(context.getFilesDir().getPath() + "//HTML", "index.html");
+
+        FileOutputStream fos = new FileOutputStream(file);
+        byte[] bytes = new byte[2048];
+        int len = 0;
+        while ((len = is.read(bytes)) != -1) {
+            fos.write(bytes, 0, len);
+        }
+        fos.flush();
+        fos.close();
+        is.close();
+    }
+
+    public void showDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setMessage("网页未更新");
+        builder.setPositiveButton("确认", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+                loadWebView();
+            }
+        });
+        builder.create().show();
+    }
+
+    private Handler mHandler = new Handler(){
+        public void handleMessage(Message msg) { //该方法是在UI主线程中执行
+            switch(msg.what) {
+                case 0:
+                    showDialog();
+                    break;
+            }
+        };
+    };
 
 
 }
