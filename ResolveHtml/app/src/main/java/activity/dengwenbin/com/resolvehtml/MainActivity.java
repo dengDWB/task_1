@@ -78,6 +78,7 @@ public class MainActivity extends AppCompatActivity {
     private String imgUrl = "file:///data/data/activity.dengwenbin.com.resolvehtml/files/HTML/assets/images";
     private String cssUrl = "file:///data/data/activity.dengwenbin.com.resolvehtml/files/HTML/assets/stylesheets";
     private String jsUrl = "file:///data/data/activity.dengwenbin.com.resolvehtml/files/HTML/assets/javascripts";
+    private String otherUrl="file:///data/data/activity.dengwenbin.com.resolvehtml/files/HTML/assets/others";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -161,8 +162,21 @@ public class MainActivity extends AppCompatActivity {
                     startDownload(url + "/" + cssLinks.attr("href"), "css", str);
                 }
                 cssLinks.attr("href", cssUrl + "/" + str);
+            }else{
+                StringBuffer oldSb = new StringBuffer(cssLinks.attr("href"));
+                String str = oldSb.substring(oldSb.lastIndexOf("/") + 1, oldSb.length());
+                if((oldSb.indexOf("http",0)!=-1)&&(oldSb.indexOf("png",0)!=-1)){
+                    startDownload(cssLinks.attr("href"),"img",str);
+                    cssLinks.attr("href",imgUrl + "/"+str);
+                }else if((oldSb.indexOf("http",0)!=-1)&&(oldSb.indexOf("ico",0)!=-1)){
+                    startDownload(cssLinks.attr("href"),"other",str);
+                    cssLinks.attr("href",otherUrl+"/"+str);
+                }
+
+                System.out.println("其他图片"+oldSb.toString());
             }
         }
+        saveIndexHtml();
 
 
     }
@@ -183,6 +197,8 @@ public class MainActivity extends AppCompatActivity {
         saveIndexHtml();
 
     }
+
+
 
 
     //下载状态监听
@@ -255,6 +271,8 @@ public class MainActivity extends AppCompatActivity {
                     FileDownloader.createAndStart(url, context.getFilesDir().getPath() + "//HTML//assets//stylesheets", filesName);
                 } else if (fileType.equals("js")) {
                     FileDownloader.createAndStart(url, context.getFilesDir().getPath() + "//HTML//assets//javascripts", filesName);
+                }else if(fileType.equals("other")){
+                    FileDownloader.createAndStart(url, context.getFilesDir().getPath() + "//HTML//assets//others", filesName);
                 }
             }
 
@@ -295,6 +313,11 @@ public class MainActivity extends AppCompatActivity {
         File jsFileDir = new File(context.getFilesDir().getPath() + "//HTML//assets//javascripts");
         if (!jsFileDir.exists()) {
             jsFileDir.mkdirs();
+        }
+
+        File otherFileDir = new File(context.getFilesDir().getPath() + "//HTML//assets//others");
+        if (!otherFileDir.exists()) {
+            otherFileDir.mkdirs();
         }
 
     }
@@ -425,7 +448,7 @@ public class MainActivity extends AppCompatActivity {
                     showDialog();
                     break;
             }
-        };
+        }
     };
 
 
